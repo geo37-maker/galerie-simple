@@ -13,6 +13,7 @@ import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.drawable.GradientDrawable;
 import android.media.ExifInterface;
 import android.media.MediaMetadataRetriever;
 import android.net.Uri;
@@ -143,6 +144,8 @@ public class MainActivity extends Activity {
     private TextView pathView;
     private Button backBtn, addBtn, photoBtn, videoBtn, drawBtn;
     private LinearLayout mediaRow;
+    private LinearLayout dashboard;
+    private TextView statsFolders, statsPhotos, statsVideos, statsNotes;
     private EditText input;
     private ListView list;
     private RowAdapter adapter;
@@ -157,7 +160,8 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         prefs = getSharedPreferences("galerie", MODE_PRIVATE);
-        dark = prefs.getBoolean("dark", false);
+        int nightMode = getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
+        dark = prefs.getBoolean("dark", nightMode == android.content.res.Configuration.UI_MODE_NIGHT_YES);
         setTheme(dark ? android.R.style.Theme_Material_NoActionBar
                 : android.R.style.Theme_Material_Light_NoActionBar);
         super.onCreate(savedInstanceState);
@@ -176,52 +180,64 @@ public class MainActivity extends Activity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(12), dp(12), dp(12), dp(12));
-        root.setBackgroundColor(dark ? 0xFF121212 : Color.WHITE);
+        root.setPadding(dp(16), dp(10), dp(16), dp(8));
+        root.setBackgroundColor(dark ? 0xFF10131F : 0xFFF5F6FC);
 
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
-        Button searchBtn = new Button(this);
-        searchBtn.setText("Recherche");
-        Button favBtn = new Button(this);
-        favBtn.setText("Favoris");
-        Button menuBtn = new Button(this);
-        menuBtn.setText("Menu");
-        bar.addView(searchBtn, new LinearLayout.LayoutParams(0,
-                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        bar.addView(favBtn, new LinearLayout.LayoutParams(0,
-                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        bar.addView(menuBtn, new LinearLayout.LayoutParams(0,
-                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        TextView brandIcon = new TextView(this);
+        brandIcon.setText("✦"); brandIcon.setTextSize(24); brandIcon.setTextColor(Color.WHITE);
+        brandIcon.setGravity(Gravity.CENTER);
+        brandIcon.setBackground(roundGradient(new int[]{0xFF667EEA,0xFF764BA2}, dp(16)));
+        bar.addView(brandIcon, new LinearLayout.LayoutParams(dp(46), dp(46)));
+        LinearLayout brandText = new LinearLayout(this); brandText.setOrientation(LinearLayout.VERTICAL);
+        brandText.setPadding(dp(10),0,0,0);
+        TextView brandTitle = new TextView(this); brandTitle.setText("Galerie Organisée");
+        brandTitle.setTextColor(fg()); brandTitle.setTextSize(19); brandTitle.setTypeface(null, android.graphics.Typeface.BOLD);
+        TextView brandSub = new TextView(this); brandSub.setText("PRO  ·  Votre espace, bien rangé");
+        brandSub.setTextColor(sub()); brandSub.setTextSize(11);
+        brandText.addView(brandTitle); brandText.addView(brandSub);
+        bar.addView(brandText, new LinearLayout.LayoutParams(0, -2, 1));
+        Button menuBtn = smallAction("⋮");
+        bar.addView(menuBtn, new LinearLayout.LayoutParams(dp(44), dp(44)));
+
+        LinearLayout actions = new LinearLayout(this); actions.setOrientation(LinearLayout.HORIZONTAL);
+        Button searchBtn = smallAction("⌕  Recherche");
+        Button favBtn = smallAction("♡  Favoris");
+        LinearLayout.LayoutParams actionLp = new LinearLayout.LayoutParams(0, dp(42), 1);
+        actionLp.setMargins(0, dp(12), dp(8), dp(10)); actions.addView(searchBtn, actionLp);
+        LinearLayout.LayoutParams favLp = new LinearLayout.LayoutParams(0, dp(42), 1);
+        favLp.setMargins(dp(8), dp(12), 0, dp(10)); actions.addView(favBtn, favLp);
+
+        dashboard = new LinearLayout(this); dashboard.setOrientation(LinearLayout.VERTICAL);
+        TextView welcome = new TextView(this); welcome.setText("Votre bibliothèque");
+        welcome.setTextColor(fg()); welcome.setTextSize(23); welcome.setTypeface(null, android.graphics.Typeface.BOLD);
+        TextView welcomeSub = new TextView(this); welcomeSub.setText("Tout votre contenu, en un seul endroit.");
+        welcomeSub.setTextColor(sub()); welcomeSub.setTextSize(13);
+        dashboard.addView(welcome); dashboard.addView(welcomeSub);
+
+        LinearLayout stats1 = new LinearLayout(this); stats1.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout stats2 = new LinearLayout(this); stats2.setOrientation(LinearLayout.HORIZONTAL);
+        statsFolders = new TextView(this); statsPhotos = new TextView(this); statsVideos = new TextView(this); statsNotes = new TextView(this);
+        stats1.addView(statCard("Dossiers", "📁", statsFolders, new int[]{0xFF667EEA,0xFF764BA2}), weightLp());
+        stats1.addView(statCard("Photos", "▧", statsPhotos, new int[]{0xFF11998E,0xFF38EF7D}), weightLp());
+        stats2.addView(statCard("Vidéos", "▶", statsVideos, new int[]{0xFFFF8008,0xFFFFC837}), weightLp());
+        stats2.addView(statCard("Notes & dessins", "✎", statsNotes, new int[]{0xFFDA22FF,0xFF9733EE}), weightLp());
+        LinearLayout.LayoutParams statRowLp = new LinearLayout.LayoutParams(-1, -2); statRowLp.topMargin = dp(10);
+        dashboard.addView(stats1, statRowLp); dashboard.addView(stats2, statRowLp);
 
         pathView = new TextView(this);
-        pathView.setTextSize(16);
-        pathView.setTextColor(fg());
+        pathView.setTextSize(14); pathView.setTextColor(fg()); pathView.setPadding(dp(2),dp(10),dp(2),dp(5));
+        backBtn = smallAction("‹  Retour");
+        input = new EditText(this); input.setMaxLines(4); input.setTextColor(fg()); input.setHintTextColor(sub());
+        input.setSingleLine(true); input.setBackground(roundSolid(dark ? 0xFF222638 : Color.WHITE, dp(14)));
+        input.setPadding(dp(14),dp(10),dp(14),dp(10));
+        addBtn = new Button(this); stylePrimary(addBtn); addBtn.setAllCaps(false);
 
-        backBtn = new Button(this);
-        backBtn.setText("Retour");
-
-        input = new EditText(this);
-        input.setMaxLines(4);
-        input.setTextColor(fg());
-        input.setHintTextColor(sub());
-
-        addBtn = new Button(this);
-
-        mediaRow = new LinearLayout(this);
-        mediaRow.setOrientation(LinearLayout.HORIZONTAL);
-        photoBtn = new Button(this);
-        photoBtn.setText("Photo");
-        videoBtn = new Button(this);
-        videoBtn.setText("Vidéo");
-        drawBtn = new Button(this);
-        drawBtn.setText("Dessin");
-        mediaRow.addView(photoBtn, new LinearLayout.LayoutParams(0,
-                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        mediaRow.addView(videoBtn, new LinearLayout.LayoutParams(0,
-                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        mediaRow.addView(drawBtn, new LinearLayout.LayoutParams(0,
-                LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        mediaRow = new LinearLayout(this); mediaRow.setOrientation(LinearLayout.HORIZONTAL);
+        photoBtn = smallAction("＋ Photo"); videoBtn = smallAction("＋ Vidéo"); drawBtn = smallAction("✎ Dessin");
+        mediaRow.addView(photoBtn, weightLp()); mediaRow.addView(videoBtn, weightLp()); mediaRow.addView(drawBtn, weightLp());
 
         list = new ListView(this);
         adapter = new RowAdapter();
@@ -274,6 +290,8 @@ public class MainActivity extends Activity {
         });
 
         root.addView(bar);
+        root.addView(actions);
+        root.addView(dashboard);
         root.addView(pathView);
         root.addView(backBtn);
         root.addView(input);
@@ -316,6 +334,42 @@ public class MainActivity extends Activity {
     }
 
     // ---------- أدوات صغيرة ----------
+
+    private GradientDrawable roundSolid(int color, int radius) {
+        GradientDrawable d = new GradientDrawable(); d.setColor(color); d.setCornerRadius(radius); return d;
+    }
+
+    private GradientDrawable roundGradient(int[] colors, int radius) {
+        GradientDrawable d = new GradientDrawable(GradientDrawable.Orientation.TL_BR, colors);
+        d.setCornerRadius(radius); return d;
+    }
+
+    private Button smallAction(String text) {
+        Button b = new Button(this); b.setText(text); b.setTextSize(12); b.setAllCaps(false);
+        b.setTextColor(fg()); b.setPadding(dp(8),0,dp(8),0);
+        b.setBackground(roundSolid(dark ? 0xFF24283A : 0xFFFFFFFF, dp(14)));
+        if (android.os.Build.VERSION.SDK_INT >= 21) b.setElevation(dp(2));
+        return b;
+    }
+
+    private LinearLayout.LayoutParams weightLp() {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(84), 1);
+        lp.setMargins(dp(3),0,dp(3),0); return lp;
+    }
+
+    private View statCard(String label, String icon, TextView value, int[] colors) {
+        LinearLayout card = new LinearLayout(this); card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(12),dp(10),dp(8),dp(8)); card.setBackground(roundGradient(colors, dp(18)));
+        if (android.os.Build.VERSION.SDK_INT >= 21) card.setElevation(dp(3));
+        TextView top = new TextView(this); top.setText(icon + "  " + label); top.setTextColor(Color.WHITE); top.setTextSize(12);
+        value.setText("0"); value.setTextColor(Color.WHITE); value.setTextSize(24); value.setTypeface(null, android.graphics.Typeface.BOLD);
+        card.addView(top); card.addView(value); return card;
+    }
+
+    private void stylePrimary(Button b) {
+        b.setTextColor(Color.WHITE); b.setTextSize(14); b.setBackground(roundGradient(new int[]{0xFF667EEA,0xFF764BA2}, dp(14)));
+        if (android.os.Build.VERSION.SDK_INT >= 21) b.setElevation(dp(2));
+    }
 
     private int dp(int v) {
         return (int) (v * getResources().getDisplayMetrics().density);
@@ -1509,6 +1563,19 @@ public class MainActivity extends Activity {
             }
         }
         adapter.notifyDataSetChanged();
+
+        int folderCount = 0, photoCount = 0, videoCount = 0, noteCount = 0;
+        for (Folder f : all) folderCount++;
+        for (Item it : items) {
+            if (T_PHOTO.equals(it.type)) photoCount++;
+            else if (T_VIDEO.equals(it.type)) videoCount++;
+            else if (T_NOTE.equals(it.type) || T_DRAW.equals(it.type)) noteCount++;
+        }
+        if (statsFolders != null) statsFolders.setText(String.valueOf(folderCount));
+        if (statsPhotos != null) statsPhotos.setText(String.valueOf(photoCount));
+        if (statsVideos != null) statsVideos.setText(String.valueOf(videoCount));
+        if (statsNotes != null) statsNotes.setText(String.valueOf(noteCount));
+        if (dashboard != null) dashboard.setVisibility(viewMode == MODE_NORMAL && currentId.isEmpty() ? View.VISIBLE : View.GONE);
 
         String header;
         if (viewMode == MODE_FAV) {
