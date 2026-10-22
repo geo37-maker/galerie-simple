@@ -1,8 +1,12 @@
 package com.galerieorganisee.pro;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.SharedPreferences;
 import android.os.Bundle;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.StrikethroughSpan;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
@@ -16,11 +20,11 @@ import java.util.ArrayList;
 import java.util.UUID;
 
 public class MainActivity extends Activity {
-    // عدد المستويات الأقصى (سنجعله قابلًا للتغيير من التطبيق في خطوة لاحقة)
     private static final int MAX_LEVELS = 3;
 
     private static class Folder {
         String id, name, parent;
+        boolean done;
         Folder(String id, String name, String parent) {
             this.id = id;
             this.name = name;
@@ -30,14 +34,14 @@ public class MainActivity extends Activity {
 
     private final ArrayList<Folder> all = new ArrayList<>();
     private final ArrayList<Folder> shown = new ArrayList<>();
-    private final ArrayList<String> labels = new ArrayList<>();
+    private final ArrayList<CharSequence> labels = new ArrayList<>();
     private String currentId = "";
 
     private SharedPreferences prefs;
     private TextView pathView;
     private Button backBtn, addBtn;
     private EditText input;
-    private ArrayAdapter<String> adapter;
+    private ArrayAdapter<CharSequence> adapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,6 +76,11 @@ public class MainActivity extends Activity {
             refresh();
         });
 
+        list.setOnItemLongClickListener((parent, view, position, id) -> {
+            showMenu(shown.get(position));
+            return true;
+        });
+
         backBtn.setOnClickListener(v -> goUp());
 
         addBtn.setOnClickListener(v -> {
@@ -100,6 +109,72 @@ public class MainActivity extends Activity {
             goUp();
         }
     }
+
+    // ---------- قائمة الضغط المطوّل ----------
+
+    private void showMenu(Folder f) {
+        String[] items = {
+                f.done ? "Annuler « révisé »" : "Marquer comme révisé",
+                "Renommer",
+                "Supprimer"
+        };
+        new AlertDialog.Builder(this)
+                .setTitle(f.name)
+                .setItems(items, (d, which) -> {
+                    if (which == 0) {
+                        f.done = !f.done;
+                        save();
+                        refresh();
+                    } else if (which == 1) {
+                        renameDialog(f);
+                    } else {
+                        deleteDialog(f);
+                    }
+                })
+                .show();
+    }
+
+    private void renameDialog(Folder f) {
+        EditText e = new EditText(this);
+        e.setText(f.name);
+        e.setSingleLine(true);
+        new AlertDialog.Builder(this)
+                .setTitle("Renommer")
+                .setView(e)
+                .setPositiveButton("OK", (d, w) -> {
+                    String n = e.getText().toString().trim();
+                    if (!n.isEmpty()) {
+                        f.name = n;
+                        save();
+                        refresh();
+                    }
+                })
+                .setNegativeButton("Annuler", null)
+                .show();
+    }
+
+    private void deleteDialog(Folder f) {
+        new AlertDialog.Builder(this)
+                .setTitle("Supprimer")
+                .setMessage("Supprimer « " + f.name + " » et tout son contenu ?")
+                .setPositiveButton("Supprimer", (d, w) -> {
+                    deleteTree(f.id);
+                    save();
+                    refresh();
+                })
+                .setNegativeButton("Annuler", null)
+                .show();
+    }
+
+    private void deleteTree(String id) {
+        ArrayList<String> kids = new ArrayList<>();
+        for (Folder f : all) if (f.parent.equals(id)) kids.add(f.id);
+        for (String k : kids) deleteTree(k);
+        Folder f = find(id);
+        if (f != null) all.remove(f);
+    }
+
+    // ---------- التنقل ----------
 
     private void goUp() {
         Folder f = find(currentId);
@@ -149,7 +224,13 @@ public class MainActivity extends Activity {
             if (f.parent.equals(currentId)) {
                 shown.add(f);
                 int n = countChildren(f.id);
-                labels.add(n > 0 ? f.name + "  (" + n + ")" : f.name);
+                String text = n > 0 ? f.name + "  (" + n + ")" : f.name;
+                SpannableString s = new SpannableString(text);
+                if (f.done) {
+                    s.setSpan(new StrikethroughSpan(), 0, text.length(),
+                            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                }
+                labels.add(s);
             }
         }
         adapter.notifyDataSetChanged();
@@ -166,12 +247,16 @@ public class MainActivity extends Activity {
         backBtn.setVisibility(currentId.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
+    // ---------- الحفظ ----------
+
     private void load() {
         try {
             JSONArray arr = new JSONArray(prefs.getString("tree", "[]"));
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject o = arr.getJSONObject(i);
-                all.add(new Folder(o.getString("id"), o.getString("name"), o.getString("parent")));
+                Folder f = new Folder(o.getString("id"), o.getString("name"), o.getString("parent"));
+                f.done = o.optBoolean("done", false);
+                all.add(f);
             }
         } catch (Exception e) {
             // بيانات تالفة: نبدأ فارغين
@@ -186,6 +271,7 @@ public class MainActivity extends Activity {
                 o.put("id", f.id);
                 o.put("name", f.name);
                 o.put("parent", f.parent);
+                o.put("done", f.done);
                 arr.put(o);
             }
             prefs.edit().putString("tree", arr.toString()).apply();
